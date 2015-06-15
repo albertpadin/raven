@@ -58,6 +58,9 @@ class SentryHandler(logging.Handler, object):
 
     def emit(self, record):
         try:
+            import os
+            self.client.http_context(self.get_http_context(os.environ))
+
             # Beware to python3 bug (see #10805) if exc_info is (None, None, None)
             self.format(record)
 
@@ -177,3 +180,25 @@ class SentryHandler(logging.Handler, object):
         return self.client.capture(
             event_type, stack=stack, data=data,
             extra=extra, date=date, **kwargs)
+
+
+    def get_http_context(self, environ):
+        from raven.utils.wsgi import get_current_url, get_headers, get_environ
+        data = {
+            'method': environ.get('REQUEST_METHOD'),
+            'url': get_current_url(environ, strip_querystring=True),
+            'query_string': environ.get('QUERY_STRING'),
+            # TODO
+            # 'data': environ.get('wsgi.input'),
+            'headers': dict(get_headers(environ)),
+            'env': dict(get_environ(environ)),
+        }
+
+        for k in environ.keys():
+            try:
+                if k not in data['env'] and environ.get(k):
+                    data['env'][k.upper()] = str(environ.get(k))
+            except:
+                pass
+
+        return data
